@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SentinelScout — Let the buff crab trade for you.</title>
+  <meta name="description" content="Autonomous Solana onchain agent. Zerion-powered risk detection, LPAgent yield migration, auto X posting. No humans required." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0a;
+      --green: #00ff88;
+      --green-dim: #00cc6a;
+      --green-glow: rgba(0,255,136,0.18);
+      --red: #ff4444;
+      --yellow: #ffcc00;
+      --gray: #555;
+      --gray-light: #888;
+      --white: #f0f0f0;
+      --terminal-bg: #0f0f0f;
+      --terminal-border: #1e1e1e;
+      --font-pixel: 'Press Start 2P', 'Courier New', monospace;
+      --font-mono: 'Courier New', monospace;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--white);
+      font-family: var(--font-mono);
+      overflow-x: hidden;
+    }
+
+    /* ─── NOISE OVERLAY ─── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      opacity: 0.5;
+    }
+
+    /* ─── GRID LINES ─── */
+    body::after {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* ─── WRAPPER ─── */
+    .page {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      padding: 0 5vw;
+    }
+
+    /* ─── NAVBAR ─── */
+    nav {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 28px 0 24px;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    .nav-logo {
+      font-family: var(--font-pixel);
+      font-size: 10px; color: var(--green);
+      letter-spacing: 2px;
+      text-shadow: 0 0 8px var(--green);
+    }
+    .nav-links { display: flex; gap: 28px; }
+    .nav-links a {
+      color: var(--gray-light); text-decoration: none;
+      font-size: 11px; letter-spacing: 1px;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--green); }
+    .nav-btn {
+      padding: 8px 18px;
+      background: transparent;
+      border: 1px solid var(--green);
+      color: var(--green);
+      font-family: var(--font-mono);
+      font-size: 11px; letter-spacing: 1px;
+      cursor: pointer; border-radius: 3px;
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+    .nav-btn:hover {
+      background: var(--green-glow);
+      box-shadow: 0 0 14px var(--green-glow);
+    }
+
+    /* ─── MAIN HERO ─── */
+    .hero {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 64px 0 40px;
+      min-height: calc(100vh - 200px);
+    }
+    .hero-header {
+      text-align: center;
+      margin-bottom: 72px;
+      width: 100%;
+    }
+    .hero-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+      width: 100%;
+    }
+
+    /* ── LEFT PANEL ── */
+    .left-panel {
+      display: flex; flex-direction: column; gap: 32px;
+    }
+
+    /* PAY.SH Style Logo */
+    .logo-wrap {
+      position: relative;
+      display: inline-block;
+      line-height: 1;
+      padding-bottom: 16px;
+      padding-right: 16px;
+    }
+    .logo-text {
+      font-family: var(--font-pixel);
+      font-size: clamp(32px, 6vw, 84px);
+      letter-spacing: -2px;
+      position: relative;
+      display: inline-block;
+      text-transform: uppercase;
+      z-index: 2;
+
+      /* Horizontal Blocky Gradient */
+      background: linear-gradient(
+        to bottom,
+        #ffffff 0%, #ffffff 25%,
+        #cccccc 25%, #cccccc 50%,
+        #999999 50%, #999999 75%,
+        #555555 75%, #555555 100%
+      );
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+    }
+
+    /* Inner Trace */
+    .logo-text::before {
+      content: attr(data-text);
+      position: absolute; 
+      top: 0; left: 0;
+      z-index: -1;
+      -webkit-text-stroke: 1.5px #888;
+      -webkit-text-fill-color: transparent;
+      transform: translate(6px, 6px);
+    }
+
+    /* Outer Trace */
+    .logo-text::after {
+      content: attr(data-text);
+      position: absolute; 
+      top: 0; left: 0;
+      z-index: -2;
+      -webkit-text-stroke: 1px #444;
+      -webkit-text-fill-color: transparent;
+      transform: translate(12px, 12px);
+    }
+
+    .version-tag {
+      display: inline-block; margin-top: 10px;
+      font-size: 10px; color: var(--gray);
+      letter-spacing: 2px;
+    }
+    .version-tag span { color: var(--green); }
+
+    .tagline {
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .tagline p {
+      font-family: var(--font-mono);
+      font-size: clamp(13px, 1.6vw, 19px);
+      color: var(--gray-light);
+      line-height: 1.6;
+    }
+    .tagline p strong {
+      color: var(--white); font-weight: normal;
+    }
+    .tagline .accent { color: var(--green); }
+
+    /* INSTALL BOX */
+    .install-block { display: flex; flex-direction: column; gap: 10px; }
+    .install-label {
+      font-family: var(--font-pixel);
+      font-size: 9px; color: var(--gray);
+      letter-spacing: 3px; text-transform: uppercase;
+    }
+    .install-box {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #0d0d0d;
+      border: 1px solid var(--green);
+      border-radius: 6px;
+      padding: 14px 18px;
+      box-shadow: 0 0 20px var(--green-glow), inset 0 0 20px rgba(0,255,136,0.02);
+      position: relative;
+      overflow: hidden;
+    }
+    .install-box::before {
+      content: '';
+      position: absolute; left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: var(--green);
+      box-shadow: 0 0 12px var(--green);
+    }
+    .install-prompt {
+      font-family: var(--font-mono);
+      font-size: clamp(12px, 1.3vw, 15px);
+      color: var(--green);
+      letter-spacing: 1px;
+    }
+    .install-prompt .dollar { color: var(--gray); margin-right: 8px; }
+    .copy-btn {
+      background: transparent;
+      border: 1px solid #2a2a2a;
+      color: var(--gray-light);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      margin-left: 16px;
+      flex-shrink: 0;
+    }
+    .copy-btn:hover { border-color: var(--green); color: var(--green); }
+    .copy-btn.copied { color: var(--green); border-color: var(--green); }
+
+    /* STATS ROW */
+    .stats-row {
+      display: flex; gap: 28px; flex-wrap: wrap;
+    }
+    .stat { display: flex; flex-direction: column; gap: 4px; }
+    .stat-val {
+      font-family: var(--font-pixel);
+      font-size: 13px; color: var(--green);
+      text-shadow: 0 0 10px var(--green);
+    }
+    .stat-lbl { font-size: 10px; color: var(--gray); letter-spacing: 1px; }
+
+    /* ── RIGHT PANEL ── */
+    .right-panel {
+      position: relative;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* CRAB CHARACTER */
+    .crab-wrap {
+      position: absolute;
+      bottom: -32px;
+      right: -24px;
+      width: clamp(180px, 32%, 300px);
+      z-index: 3;
+      pointer-events: none;
+      animation: breathe 3s ease-in-out infinite;
+      filter: drop-shadow(0 0 40px rgba(255,40,40,0.5)) drop-shadow(0 0 12px rgba(255,40,40,0.3));
+    }
+    .crab-wrap img {
+      width: 100%; display: block;
+      opacity: 0.82;
+      mix-blend-mode: normal;
+      image-rendering: pixelated;
+    }
+    @keyframes breathe {
+      0%,100% { transform: scale(1); }
+      50%      { transform: scale(1.025); }
+    }
+
+    /* TERMINAL WINDOW */
+    .terminal-window {
+      width: 100%; max-width: 560px;
+      background: var(--terminal-bg);
+      border: 1px solid #222;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px #1a1a1a,
+        0 24px 80px rgba(0,0,0,0.7),
+        0 0 40px rgba(0,255,136,0.04);
+      position: relative; z-index: 2;
+    }
+
+    /* title bar */
+    .term-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px;
+      background: #161616;
+      border-bottom: 1px solid #1e1e1e;
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+    .dot-red    { background: #ff5f57; }
+    .dot-yellow { background: #ffbd2e; }
+    .dot-green  { background: #28c840; }
+    .term-title {
+      margin-left: 8px; flex: 1;
+      text-align: center; font-size: 11px; color: var(--gray);
+      letter-spacing: 1px;
+    }
+    .term-conn {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 10px; color: var(--gray);
+    }
+    .term-conn-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--green);
+      animation: blink-dot 1.5s ease-in-out infinite;
+    }
+    @keyframes blink-dot {
+      0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+    }
+
+    /* terminal body */
+    .term-body {
+      padding: 24px 22px;
+      min-height: 420px;
+      position: relative;
+      font-size: clamp(10px, 1.05vw, 13px);
+      line-height: 1.9;
+    }
+
+
+    #terminal-output {
+      position: relative; z-index: 1;
+      font-family: var(--font-mono);
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .t-cmd   { color: #ccc; }
+    .t-key   { color: var(--green); }
+    .t-warn  { color: #ffcc00; }
+    .t-err   { color: #ff6b6b; }
+    .t-muted { color: var(--gray); }
+    .t-hash  { color: #9b59ff; }
+    .t-info  { color: #58b8ff; }
+
+    .cursor {
+      display: inline-block;
+      width: 9px; height: 1.1em;
+      background: var(--green);
+      vertical-align: text-bottom;
+      animation: blink 0.9s step-end infinite;
+    }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+    /* ─── BOTTOM BADGES ─── */
+    .badges-section {
+      padding: 40px 0 52px;
+      border-top: 1px solid #181818;
+      display: flex; flex-direction: column; gap: 22px;
+    }
+    .badge-row {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    }
+    .badge-label {
+      font-family: var(--font-pixel);
+      font-size: 7px; color: var(--gray);
+      letter-spacing: 2px; text-transform: uppercase;
+      white-space: nowrap; min-width: 90px;
+    }
+    .badges { display: flex; gap: 10px; flex-wrap: wrap; }
+    .badge {
+      display: flex; align-items: center; gap: 7px;
+      padding: 6px 14px;
+      background: #111;
+      border: 1px solid #252525;
+      border-radius: 4px;
+      font-size: 11px; color: var(--gray-light);
+      letter-spacing: 0.5px;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .badge:hover { border-color: #3a3a3a; color: var(--white); }
+    .badge-icon { font-size: 14px; line-height: 1; }
+
+    /* ─── FOOTER ─── */
+    footer {
+      padding: 20px 0 28px;
+      border-top: 1px solid #111;
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 12px;
+    }
+    footer p { font-size: 10px; color: var(--gray); letter-spacing: 1px; }
+    footer a { color: var(--green); text-decoration: none; }
+    .status-live {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; color: var(--green);
+    }
+    .status-live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: blink-dot 1.2s ease-in-out infinite;
+    }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 860px) {
+      .hero { grid-template-columns: 1fr; padding: 40px 0 32px; }
+      .right-panel { min-height: 400px; }
+      .crab-wrap { bottom: -10px; }
+      .logo-text { font-size: clamp(14px, 5vw, 28px); }
+      nav .nav-links { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- ── NAV ── -->
+  <nav>
+    <span class="nav-logo">SENTINEL<span style="color:#555">_</span>SCOUT</span>
+    <div class="nav-links">
+      <a href="#">Docs</a>
+      <a href="#">GitHub</a>
+      <a href="#">Colosseum</a>
+    </div>
+    <button class="nav-btn">GET STARTED ›</button>
+  </nav>
+
+  <!-- ── HERO ── -->
+  <section class="hero">
+
+    <div class="hero-header">
+      <div class="logo-wrap">
+        <div class="logo-text" data-text="SENTINEL-SCOUT">SENTINEL-SCOUT</div>
+      </div>
+      <div class="version-tag" style="display:block;">v0.1.0 — <span>DEVNET LIVE</span></div>
+    </div>
+
+    <div class="hero-columns">
+      <!-- LEFT -->
+      <div class="left-panel">
+
+      <div class="tagline">
+        <p><strong>"go touch some grass.</strong></p>
+        <p><strong>let the <span class="accent">buff crab</span> trade for you."</strong></p>
+      </div>
+
+      <div class="install-block">
+        <div class="install-label">INSTALL NOW</div>
+        <div class="install-box">
+          <span class="install-prompt">
+            <span class="dollar">$</span>npx sentinelscout setup
+          </span>
+          <button class="copy-btn" id="copyBtn" onclick="copyInstall()">
+            ⧉ copy
+          </button>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-val">15<span style="font-size:9px;color:var(--gray)">min</span></div>
+          <div class="stat-lbl">SCAN INTERVAL</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val">3</div>
+          <div class="stat-lbl">ACTIVE TRACKS</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val">0</div>
+          <div class="stat-lbl">HUMANS NEEDED</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right-panel">
+      <div class="terminal-window">
+
+        <!-- title bar -->
+        <div class="term-bar">
+          <div class="dot dot-red"></div>
+          <div class="dot dot-yellow"></div>
+          <div class="dot dot-green"></div>
+          <div class="term-title">sentinelscout — bash</div>
+          <div class="term-conn">
+            <div class="term-conn-dot"></div>
+            devnet
+          </div>
+        </div>
+
+        <!-- body -->
+        <div class="term-body">
+
+          <div id="terminal-output"></div>
+          <span class="cursor" id="cursor"></span>
+        </div>
+
+      </div>
+
+      <!-- crab in front, standing -->
+      <div class="crab-wrap">
+        <img src="crab.jpg" alt="SentinelScout Buff Crab Agent" />
+      </div>
+    </div>
+  </div>
+
+  </section>
+
+  <!-- ── BADGES ── -->
+  <div class="badges-section">
+    <div class="badge-row">
+      <div class="badge-label">WORKS WITH</div>
+      <div class="badges">
+        <div class="badge"><span class="badge-icon">⚡</span> Zerion CLI</div>
+        <div class="badge"><span class="badge-icon">💧</span> LPAgent.io</div>
+        <div class="badge"><span class="badge-icon">🤖</span> Solana Agent Kit</div>
+        <div class="badge"><span class="badge-icon">🧠</span> Eliza Framework</div>
+      </div>
+    </div>
+    <div class="badge-row">
+      <div class="badge-label">BUILT FOR</div>
+      <div class="badges">
+        <div class="badge"><span class="badge-icon">🏆</span> Colosseum Hackathon</div>
+        <div class="badge"><span class="badge-icon">🌐</span> Solana Devnet</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── FOOTER ── -->
+  <footer>
+    <p>© 2026 SentinelScout — <a href="#">MIT License</a></p>
+    <div class="status-live">
+      <div class="status-live-dot"></div>
+      ALL SYSTEMS OPERATIONAL
+    </div>
+    <p>Built for <a href="#">Colosseum Frontier 2026</a></p>
+  </footer>
+
+</div>
+
+<script>
+// ── TYPEWRITER ──────────────────────────────────────────────────────────────
+const lines = [
+  { text: '$ sentinelscout analyze <wallet>',       cls: 't-cmd',   delay: 60 },
+  { text: '',                                                                    },
+  { text: '> Zerion: fetching portfolio...',         cls: 't-muted', delay: 40 },
+  { text: '> Risk score: 74 — HIGH',                cls: 't-warn',  delay: 45 },
+  { text: '> Memecoin exposure detected',            cls: 't-err',   delay: 45 },
+  { text: '> Swapping 30% JTO → USDC...',           cls: 't-key',   delay: 45 },
+  { text: '> Transaction confirmed: 3xK...f9',      cls: 't-hash',  delay: 45 },
+  { text: '> Posting to X: "Stayed defensive.',     cls: 't-info',  delay: 42 },
+  { text: '  Risk = 74. #Solana"',                  cls: 't-info',  delay: 42 },
+  { text: '> Next scan in 15 min ↻',                cls: 't-muted', delay: 48 },
+];
+
+const output = document.getElementById('terminal-output');
+const cursorEl = document.getElementById('cursor');
+
+let lineIndex = 0;
+let charIndex  = 0;
+let currentEl  = null;
+let isPaused   = false;
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function typeLine(line) {
+  if (!line.text) {
+    output.appendChild(document.createElement('br'));
+    return;
+  }
+  const span = document.createElement('span');
+  if (line.cls) span.className = line.cls;
+  output.appendChild(span);
+  output.appendChild(document.createElement('br'));
+
+  for (let i = 0; i < line.text.length; i++) {
+    span.textContent += line.text[i];
+    // position cursor after span
+    cursorEl.remove();
+    span.after(cursorEl);
+    const d = (line.delay || 50) + Math.random() * 20 - 10;
+    await sleep(Math.max(d, 10));
+  }
+}
+
+async function runTerminal() {
+  while (true) {
+    output.innerHTML = '';
+    output.appendChild(cursorEl);
+
+    for (const line of lines) {
+      await sleep(220);
+      await typeLine(line);
+    }
+
+    // pause, then clear
+    await sleep(2400);
+    output.innerHTML = '';
+    output.appendChild(cursorEl);
+    await sleep(600);
+  }
+}
+
+runTerminal();
+
+// ── COPY BUTTON ─────────────────────────────────────────────────────────────
+function copyInstall() {
+  navigator.clipboard.writeText('npx sentinelscout setup').then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = '✓ copied';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = '⧉ copy';
+      btn.classList.remove('copied');
+    }, 1800);
+  });
+}
+</script>
+
+</body>
+</html>

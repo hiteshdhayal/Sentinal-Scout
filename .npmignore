@@ -1,0 +1,13 @@
+src/
+bin/
+dashboard/
+.github/
+__tests__/
+tests/
+tsconfig.json
+sentinel.config.json
+*.log
+.env
+docker-compose.yml
+Dockerfile
+

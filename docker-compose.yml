@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  sentinelscout-agent:
+    image: sentinelscout/agent:latest
+    container_name: sentinelscout-agent
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./sentinel.config.json:/app/sentinel.config.json:ro
